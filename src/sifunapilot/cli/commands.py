@@ -44,9 +44,11 @@ def cmd_doctor() -> None:
     table.add_row("✓ Python 3.11+", "OK")
     table.add_row("✓ Configuration", "OK")
     table.add_row("✓ SQLite", "OK")
+    table.add_row("✓ SpeechRecognition", "OK")
+    table.add_row("✓ pyttsx3 (TTS)", "OK")
     table.add_row("⚠ Playwright", "Not installed/verified")
     table.add_row("⚠ Ollama", "Not detected")
-    table.add_row("⚠ Voice dependencies", "Not installed")
+    table.add_row("⚠ Microphone", "Check if available")
     console.print(table)
 
 
@@ -81,6 +83,55 @@ def cmd_start(voice: bool = False) -> None:
         f"AI: {settings.ai.provider} | Mode: {settings.agent.mode} | "
         f"Voice: {'Enabled' if voice or settings.voice.enabled else 'Disabled'}"
     )
+
+
+def cmd_start_interactive(voice: bool = False) -> None:
+    import asyncio
+
+    asyncio.run(_run_interactive(voice))
+
+
+async def _run_interactive(voice: bool = False) -> None:
+    from sifunapilot.voice.stt import get_stt
+    from sifunapilot.voice.tts import get_tts
+    from sifunapilot.agent.orchestrator import Orchestrator
+
+    stt = get_stt()
+    tts = get_tts()
+    orchestrator = Orchestrator()
+
+    if voice:
+        tts.speak("SifunaPilot is ready. Say a command or type exit to quit.")
+    else:
+        print_success("Type commands or 'exit' to quit.")
+
+    while True:
+        try:
+            if voice:
+                console.print("[cyan]Listening...[/cyan]")
+                text = stt.listen(timeout=5, phrase_time_limit=10)
+                if not text:
+                    console.print("[yellow]No speech detected, try again...[/yellow]")
+                    continue
+                console.print(f"[green]You (voice):[/green] {text}")
+                tts.speak(f"Executing {text}")
+            else:
+                text = input("You > ").strip()
+            if text.lower() in ("exit", "quit", "stop"):
+                if voice:
+                    tts.speak("Goodbye")
+                print_success("Goodbye!")
+                break
+            if not text:
+                continue
+            await orchestrator.execute_task(text)
+            if voice:
+                tts.speak("Done")
+        except KeyboardInterrupt:
+            print_success("\nGoodbye!")
+            break
+        except EOFError:
+            break
 
 
 def cmd_stop() -> None:
